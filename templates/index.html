@@ -16,16 +16,18 @@
 </head>
 <body>
     <h1>Live Video Feed</h1>
-    <video id="video" width="640" height="480" autoplay></video>
-    <canvas id="canvas" width="640" height="480"></canvas>
-    <img id="flippedImage" width="640" height="480">
+    <video id="video" width="320" height="240" autoplay></video>
+    <canvas id="canvas" width="320" height="240"></canvas>
+    <img id="flippedImage" width="320" height="240">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.js"></script>
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const flippedImage = document.getElementById('flippedImage');
         const context = canvas.getContext('2d');
+        const socket = io();
 
-        navigator.mediaDevices.getUserMedia({ video: true })
+        navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } })
             .then(stream => {
                 video.srcObject = stream;
             })
@@ -34,28 +36,21 @@
             });
 
         video.addEventListener('play', () => {
-            function draw() {
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const dataUrl = canvas.toDataURL('image/png');
-
-                fetch('/upload', {
-                    method: 'POST',
-                    body: JSON.stringify({ image: dataUrl }),
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    flippedImage.src = data.flipped_image;
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                });
-
+            let lastTimestamp = 0;
+            function draw(timestamp) {
+                if (timestamp - lastTimestamp > 100) {  // Process every 100ms (~10 FPS)
+                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    const dataUrl = canvas.toDataURL('image/png');
+                    socket.emit('image', dataUrl);
+                    lastTimestamp = timestamp;
+                }
                 requestAnimationFrame(draw);
             }
             draw();
+        });
+
+        socket.on('flipped_image', (data) => {
+            flippedImage.src = data;
         });
     </script>
 </body>
